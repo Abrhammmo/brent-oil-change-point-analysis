@@ -1,0 +1,14 @@
+{
+    "model_type": "Bayesian Change Point (Mean Shift)",
+    "data": "Brent Oil Log Returns",
+    "priors": {
+        "tau": "DiscreteUniform(0, T)",
+        "mu_1": "Normal(0, 1)",
+        "mu_2": "Normal(0, 1)",
+        "sigma": "HalfNormal(1)"
+    },
+    "sampler": "NUTS",
+    "chains": 4,
+    "draws": 2000,
+    "tune": 1000
+}
