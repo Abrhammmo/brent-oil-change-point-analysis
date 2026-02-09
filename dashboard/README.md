@@ -77,4 +77,4 @@ Running locally
 
 Notes
 
-- Keep API route names and JSON shapes consistent between backend `routes/` and frontend `services/api.js`.
+- Keep API route names and JSON shapes consistent between backend `routes/` and frontend `services/api.js`. 
