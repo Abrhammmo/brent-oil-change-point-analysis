@@ -7,6 +7,7 @@ Contents and purpose
 Image provenance and regeneration
 
 Quick instructions to regenerate a figure
+
 1. Open the relevant notebook in `notebooks/` (e.g., `time_series_analysis.ipynb`).
 2. Re-run the plotting cell(s) that produce the figure.
 3. Export or save the figure to this folder (prefer SVG for vector charts or PNG for raster):
@@ -26,9 +27,8 @@ Major images (descriptions)
 - `home_page.png`: The dashboard landing view — overview charts, high-level stats, and navigation to the events and analysis pages.
 - `price analysis for an event.png`: Deep-dive visual showing price series around a selected event, including local trend lines and summary statistics (pre/post means and volatility).
 - `price change around key events.png`: Aggregated chart that overlays price changes around multiple key events (aligned at event date) to visualize typical responses.
-- `Responsive frontend check.png`: Mobile / small-screen screenshot demonstrating responsive layout and component stacking for narrow viewports.
+- `Responsive frontend check.png`(GALAXY Z FOLD): Mobile / small-screen screenshot demonstrating responsive layout and component stacking for narrow viewports.
 - `Responsive frontend check.png` (desktop): Desktop / wide-screen screenshot showing full layout and side-by-side components (this filename is reused for both checks in the repo).
 - `volatility analysis and events.png`: Chart combining rolling volatility metrics with event markers to show temporal alignment between volatility spikes and real-world events.
 - `volatility analysis for an event.png`: Focused volatility plot around a single event, showing how volatility changes in the event window and summary metrics.
 
-These images are intended for README illustrations and quick documentation. If you want, I can add captions to each file and generate lower-resolution thumbnail copies for the docs.
