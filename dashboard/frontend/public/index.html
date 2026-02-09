@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Brent Oil Price Analysis Dashboard - Bayesian Change Point Detection"
+    />
+    <meta name="theme-color" content="#1e3a5f" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <title>Brent Oil Price Analysis | Change Point Detection</title>
+    <style>
+      /* Critical CSS for initial load */
+      body {
+        margin: 0;
+        padding: 0;
+        background: #f8f9fa;
+      }
+      #root {
+        min-height: 100vh;
+      }
+      .initial-loader {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .initial-loader .spinner {
+        width: 40px;
+        height: 40px;
+        border: 3px solid #e9ecef;
+        border-top-color: #1e3a5f;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this application.</noscript>
+    <div id="root">
+      <div class="initial-loader">
+        <div class="spinner"></div>
+        <p style="color: #6c757d; font-family: &quot;Inter&quot;, sans-serif">
+          Loading Dashboard...
+        </p>
+      </div>
+    </div>
+  </body>
+</html>
