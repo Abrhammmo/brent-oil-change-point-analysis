@@ -1,0 +1,5 @@
+outs:
+- md5: fec61654450daec89b6efe5ff66f2c2c
+  size: 516157
+  hash: md5
+  path: brentoilprices_processed.csv
