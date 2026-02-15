@@ -1,8 +1,8 @@
-import PriceChart from "../components/PriceChart";
+import { useEffect, useMemo, useState } from "react";
 import ChangePointChart from "../components/ChangePointChart";
 import EventTimeline from "../components/EventTimeline";
 import Filters from "../components/Filters";
-import { useEffect, useState } from "react";
+import PriceChart from "../components/PriceChart";
 import API from "../services/api";
 
 const Dashboard = () => {
@@ -16,251 +16,213 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [events, setEvents] = useState([]);
   const [selectedEvent, setSelectedEvent] = useState(null);
-  const [volatilityData, setVolatilityData] = useState([]);
+  const [clickedDate, setClickedDate] = useState(null);
   const [activeTab, setActiveTab] = useState("prices");
+  const [macroToggles, setMacroToggles] = useState({
+    GDP: true,
+    Inflation: false,
+    ExchangeRate: false,
+    Causes: false
+  });
+  const [shapData, setShapData] = useState({ global_plot_b64: null, local_plot_b64: null });
 
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
         setLoading(true);
-        
-        // Fetch prices for stats
-        const pricesRes = await API.get("/prices");
+        const [pricesRes, eventsRes, cpRes, volRes] = await Promise.all([
+          API.get("/prices"),
+          API.get("/events"),
+          API.get("/change-points"),
+          API.get("/prices/volatility?window=30")
+        ]);
         const data = pricesRes.data.data || [];
-        
-        if (data.length > 0) {
-          const prices = data.map(d => d.Price).filter(p => p != null);
-          const avgPrice = prices.length > 0 
-            ? (prices.reduce((a, b) => a + b, 0) / prices.length).toFixed(2)
-            : 0;
-            
-          setStats({
-            totalDataPoints: data.length,
-            dateRange: `${data[0]?.Date || 'N/A'} to ${data[data.length - 1]?.Date || 'N/A'}`,
-            avgPrice: avgPrice,
-            changePoints: 1,
-            volatility: 0
-          });
-        }
-        
-        // Fetch events
-        try {
-          const eventsRes = await API.get("/events");
-          setEvents(eventsRes.data.events || eventsRes.data || []);
-        } catch (eventsErr) {
-          console.warn("Events fetch failed:", eventsErr);
-        }
-        
-        // Fetch volatility
-        try {
-          const volRes = await API.get("/prices/volatility?window=30");
-          setVolatilityData(volRes.data.data || []);
-        } catch (volErr) {
-          console.warn("Volatility fetch failed:", volErr);
-        }
-        
-      } catch (error) {
-        console.error("Error fetching initial data:", error);
+        const prices = data.map((d) => d.Price).filter((p) => p != null);
+        const avgPrice = prices.length ? prices.reduce((a, b) => a + b, 0) / prices.length : 0;
+        const volatilityRows = volRes.data.data || [];
+        const avgVol = volatilityRows.length
+          ? volatilityRows.reduce((acc, row) => acc + Number(row.Volatility || 0), 0) / volatilityRows.length
+          : 0;
+        setStats({
+          totalDataPoints: data.length,
+          dateRange: `${data[0]?.Date || "N/A"} to ${data[data.length - 1]?.Date || "N/A"}`,
+          avgPrice: avgPrice,
+          changePoints: (cpRes.data?.change_points || []).length,
+          volatility: avgVol
+        });
+        setEvents(eventsRes.data.events || []);
       } finally {
         setLoading(false);
       }
     };
-
     fetchInitialData();
   }, []);
 
+  useEffect(() => {
+    const selectedDate = selectedEvent?.date || clickedDate;
+    const fetchShap = async () => {
+      const query = selectedDate ? `?selected_date=${encodeURIComponent(selectedDate)}` : "";
+      const shapRes = await API.get(`/change-points/shap${query}`);
+      setShapData(shapRes.data || {});
+    };
+    fetchShap().catch(() => {
+      setShapData({ global_plot_b64: null, local_plot_b64: null });
+    });
+  }, [selectedEvent, clickedDate]);
+
   const handleFilterChange = async (filters) => {
-    try {
-      const params = new URLSearchParams();
-      if (filters.startDate) params.append("start_date", filters.startDate);
-      if (filters.endDate) params.append("end_date", filters.endDate);
-      
-      const pricesRes = await API.get(`/prices?${params.toString()}`);
-      const data = pricesRes.data.data || [];
-      
-      if (data.length > 0) {
-        const prices = data.map(d => d.Price).filter(p => p != null);
-        const avgPrice = prices.length > 0 
-          ? (prices.reduce((a, b) => a + b, 0) / prices.length).toFixed(2)
-          : 0;
-          
-        setStats(prev => ({
-          ...prev,
-          totalDataPoints: data.length,
-          dateRange: `${data[0]?.Date || 'N/A'} to ${data[data.length - 1]?.Date || 'N/A'}`,
-          avgPrice: avgPrice
-        }));
-      }
-    } catch (error) {
-      console.error("Error applying filters:", error);
-    }
+    const params = new URLSearchParams();
+    if (filters.startDate) params.append("start_date", filters.startDate);
+    if (filters.endDate) params.append("end_date", filters.endDate);
+    const pricesRes = await API.get(`/prices?${params.toString()}`);
+    const data = pricesRes.data.data || [];
+    const prices = data.map((d) => d.Price).filter((p) => p != null);
+    setStats((prev) => ({
+      ...prev,
+      totalDataPoints: data.length,
+      dateRange: `${data[0]?.Date || "N/A"} to ${data[data.length - 1]?.Date || "N/A"}`,
+      avgPrice: prices.length ? prices.reduce((a, b) => a + b, 0) / prices.length : 0
+    }));
   };
 
-  if (loading) {
-    return (
-      <div className="dashboard-container">
-        <div className="dashboard-header">
-          <h1>🛢️ Brent Oil Price Analysis Dashboard</h1>
-          <p>Bayesian Change Point Detection & Market Event Analysis</p>
-        </div>
-        <div className="stats-grid">
-          {[1, 2, 3, 4].map(i => (
-            <div key={i} className="stat-card skeleton" style={{ height: 100 }}></div>
-          ))}
-        </div>
-      </div>
-    );
-  }
+  const macroToggleButtons = useMemo(
+    () => ["GDP", "Inflation", "ExchangeRate", "Causes"],
+    []
+  );
+
+  const closestClickedEvent = useMemo(() => {
+    if (!macroToggles.Causes || !clickedDate || !events.length) return null;
+    const clickedTs = new Date(clickedDate).getTime();
+    if (Number.isNaN(clickedTs)) return null;
+
+    let best = null;
+    let bestDiff = Number.POSITIVE_INFINITY;
+    for (const event of events) {
+      const eventTs = new Date(event.date).getTime();
+      if (Number.isNaN(eventTs)) continue;
+      const diff = Math.abs(eventTs - clickedTs);
+      if (diff < bestDiff) {
+        best = event;
+        bestDiff = diff;
+      }
+    }
+    return best;
+  }, [events, clickedDate, macroToggles.Causes]);
+
+  if (loading) return <div className="dashboard-container"><div className="skeleton" style={{ height: 260 }} /></div>;
 
   return (
     <div className="dashboard-container fade-in">
       <header className="dashboard-header">
-        <h1>🛢️ Brent Oil Price Analysis Dashboard</h1>
-        <p>Bayesian Change Point Detection & Market Event Analysis</p>
+        <h1>Brent Oil Regime Intelligence Dashboard</h1>
+        <p>Multi-change-point Bayesian analysis, macro overlays, and explainability.</p>
       </header>
 
-      {/* Statistics Cards */}
       <section className="stats-grid">
-        <div className="stat-card">
-          <div className="label">Total Data Points</div>
-          <div className="value">{stats.totalDataPoints.toLocaleString()}</div>
-        </div>
-        <div className="stat-card">
-          <div className="label">Date Range</div>
-          <div className="value" style={{ fontSize: '1rem' }}>{stats.dateRange}</div>
-        </div>
-        <div className="stat-card">
-          <div className="label">Average Price</div>
-          <div className="value">${Number(stats.avgPrice).toFixed(2)}</div>
-        </div>
-        <div className="stat-card">
-          <div className="label">Detected Change Points</div>
-          <div className="value">{stats.changePoints}</div>
-          <div className="change">Bayesian Analysis</div>
-        </div>
+        <div className="stat-card"><div className="label">Data Points</div><div className="value">{stats.totalDataPoints}</div></div>
+        <div className="stat-card"><div className="label">Date Range</div><div className="value" style={{ fontSize: "0.95rem" }}>{stats.dateRange}</div></div>
+        <div className="stat-card"><div className="label">Average Price</div><div className="value">${Number(stats.avgPrice).toFixed(2)}</div></div>
+        <div className="stat-card"><div className="label">Change Points</div><div className="value">{stats.changePoints}</div></div>
+        <div className="stat-card"><div className="label">Avg Volatility</div><div className="value">{Number(stats.volatility).toFixed(4)}</div></div>
       </section>
 
-      {/* Filters */}
-      <Filters 
-        onFilterChange={handleFilterChange} 
-        onEventSelect={setSelectedEvent}
-        events={events}
-      />
+      <Filters onFilterChange={handleFilterChange} onEventSelect={setSelectedEvent} events={events} />
 
-      {/* Tab Navigation */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
-        {[
-          { id: 'prices', label: '📈 Price Analysis' },
-          { id: 'volatility', label: '📊 Volatility Analysis' },
-          { id: 'events', label: '📅 Events & Impact' }
-        ].map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            style={{
-              background: activeTab === tab.id ? '#1e3a5f' : '#f0f0f0',
-              color: activeTab === tab.id ? 'white' : '#1a1a2e',
-              border: 'none',
-              padding: '12px 20px',
-              borderRadius: 8,
-              cursor: 'pointer',
-              fontWeight: 500,
-              transition: 'all 0.2s'
-            }}
-          >
-            {tab.label}
+      <div className="tab-nav">
+        {["prices", "regimes", "events", "shap"].map((tab) => (
+          <button key={tab} className={`tab-btn ${activeTab === tab ? "active" : ""}`} onClick={() => setActiveTab(tab)}>
+            {tab.toUpperCase()}
           </button>
         ))}
       </div>
 
-      {/* Tab Content */}
-      {activeTab === 'prices' && (
-        <>
-          <section className="chart-section">
-            <div className="chart-grid">
-              <div className="card">
-                <div className="card-header">
-                  <h3>📈 Brent Oil Price Time Series</h3>
-                  {selectedEvent && (
-                    <span className="change-point-badge">
-                      📍 {selectedEvent.title}
-                    </span>
-                  )}
-                </div>
-                <div className="card-body">
-                  <PriceChart 
-                    changePoint={selectedEvent?.date} 
-                    highlightedDate={selectedEvent?.date}
-                  />
-                </div>
-              </div>
-              
-              <div className="card">
-                <div className="card-header">
-                  <h3>🎯 Change Point Analysis</h3>
-                </div>
-                <div className="card-body">
-                  <ChangePointChart />
-                </div>
-              </div>
-            </div>
-          </section>
-        </>
-      )}
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+        {macroToggleButtons.map((feature) => (
+          <button
+            key={feature}
+            className={`tab-btn ${macroToggles[feature] ? "active" : ""}`}
+            onClick={() => setMacroToggles((prev) => ({ ...prev, [feature]: !prev[feature] }))}
+          >
+            {feature}
+          </button>
+        ))}
+      </div>
 
-      {activeTab === 'volatility' && (
-        <section className="chart-section">
-          <div className="card">
-            <div className="card-header">
-              <h3>📊 Price Volatility Over Time</h3>
-              <span style={{ fontSize: '0.8rem', color: '#6c757d' }}>
-                30-day rolling standard deviation of returns
-              </span>
-            </div>
-            <div className="card-body">
-              <PriceChart 
-                    highlightedDate={selectedEvent?.date}
-                  />
-            </div>
+      {macroToggles.Causes && closestClickedEvent && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card-header"><h3>Closest Cause To Clicked Date</h3></div>
+          <div className="card-body">
+            <p style={{ marginBottom: 6 }}>
+              <strong>{closestClickedEvent.date}</strong> - {closestClickedEvent.title}
+            </p>
+            {closestClickedEvent.description && (
+              <p style={{ color: "#6c757d" }}>{closestClickedEvent.description}</p>
+            )}
           </div>
-        </section>
+        </div>
       )}
 
-      {activeTab === 'events' && (
-        <section className="chart-section">
-          <div className="card">
-            <div className="card-header">
-              <h3>📅 Key Market Events & Impact Analysis</h3>
-            </div>
-            <div className="card-body">
-              <EventTimeline />
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* Event Impact Summary */}
       {selectedEvent && (
-        <section className="chart-section fade-in">
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card-header"><h3>Selected Event Description</h3></div>
+          <div className="card-body">
+            <p style={{ marginBottom: 6 }}>
+              <strong>{selectedEvent.date}</strong> - {selectedEvent.title}
+            </p>
+            <p style={{ color: "#6c757d" }}>
+              {selectedEvent.description || "No description available for this event."}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "prices" && (
+        <div className="card">
+          <div className="card-header"><h3>Price + Macro Overlay</h3></div>
+          <div className="card-body">
+            <PriceChart
+              highlightedDate={selectedEvent?.date}
+              macroToggles={macroToggles}
+              closestEventDate={closestClickedEvent?.date}
+              onDateClick={setClickedDate}
+            />
+          </div>
+        </div>
+      )}
+
+      {activeTab === "regimes" && (
+        <div className="card">
+          <div className="card-header"><h3>Regime Visualization</h3></div>
+          <div className="card-body"><ChangePointChart macroToggles={macroToggles} events={events} /></div>
+        </div>
+      )}
+
+      {activeTab === "events" && (
+        <div className="card">
+          <div className="card-header"><h3>Business Event Timeline</h3></div>
+          <div className="card-body"><EventTimeline /></div>
+        </div>
+      )}
+
+      {activeTab === "shap" && (
+        <div className="chart-grid-equal">
           <div className="card">
-            <div className="card-header">
-              <h3>🎯 Event Impact Analysis</h3>
-            </div>
+            <div className="card-header"><h3>SHAP Summary</h3></div>
             <div className="card-body">
-              <div className="events-grid">
-                <div className="event-card" style={{ borderLeftColor: '#ef4444' }}>
-                  <div className="event-date">{selectedEvent.date}</div>
-                  <div className="event-title">{selectedEvent.title}</div>
-                  <div className="event-description">
-                    This event marked a significant turning point in Brent oil prices. 
-                    The Bayesian change point detection algorithm identified this date 
-                    as a structural break in the price time series.
-                  </div>
-                </div>
-              </div>
+              {shapData.global_plot_b64 ? (
+                <img alt="SHAP global" style={{ width: "100%" }} src={`data:image/png;base64,${shapData.global_plot_b64}`} />
+              ) : <p>No global SHAP artifact found.</p>}
             </div>
           </div>
-        </section>
+          <div className="card">
+            <div className="card-header"><h3>Why this prediction?</h3></div>
+            <div className="card-body">
+              {shapData.local_plot_b64 ? (
+                <img alt="SHAP local" style={{ width: "100%" }} src={`data:image/png;base64,${shapData.local_plot_b64}`} />
+              ) : <p>No local SHAP artifact found.</p>}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -72,19 +72,37 @@ const EventTimeline = () => {
     return acc;
   }, []).slice(0, 12);
 
+  const groupedByDecade = uniqueEvents.reduce((acc, event) => {
+    const year = Number(String(event.date || "").slice(0, 4));
+    if (Number.isNaN(year)) return acc;
+    const decade = `${Math.floor(year / 10) * 10}s`;
+    if (!acc[decade]) acc[decade] = [];
+    acc[decade].push(event);
+    return acc;
+  }, {});
+
+  const decadeOrder = Object.keys(groupedByDecade).sort();
+
   return (
-    <div className="events-grid">
-      {uniqueEvents.map((event, idx) => (
-        <div 
-          key={idx} 
-          className="event-card fade-in" 
-          style={{ animationDelay: `${idx * 0.05}s` }}
-        >
-          <div className="event-date">{event.date}</div>
-          <div className="event-title">{event.title}</div>
-          {event.description && (
-            <div className="event-description">{event.description}</div>
-          )}
+    <div>
+      {decadeOrder.map((decade) => (
+        <div key={decade} style={{ marginBottom: 16 }}>
+          <h4 style={{ marginBottom: 8 }}>{decade}</h4>
+          <div className="events-grid">
+            {groupedByDecade[decade].map((event, idx) => (
+              <div
+                key={`${decade}-${idx}`}
+                className="event-card fade-in"
+                style={{ animationDelay: `${idx * 0.05}s` }}
+              >
+                <div className="event-date">{event.date}</div>
+                <div className="event-title">{event.title}</div>
+                {event.description && (
+                  <div className="event-description">{event.description}</div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       ))}
     </div>

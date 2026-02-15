@@ -1,14 +1,26 @@
-import { 
-  LineChart, Line, XAxis, YAxis, Tooltip, 
-  ResponsiveContainer, ReferenceLine, CartesianGrid,
-  AreaChart, Area
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  ReferenceLine,
+  CartesianGrid
 } from "recharts";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import API from "../services/api";
 
-const PriceChart = ({ changePoint = null, highlightedDate = null, showVolatility = false }) => {
+const PriceChart = ({
+  changePoints = [],
+  highlightedDate = null,
+  showVolatility = false,
+  macroToggles = { GDP: false, Inflation: false, ExchangeRate: false, Causes: false },
+  closestEventDate = null,
+  onDateClick = null
+}) => {
   const [data, setData] = useState([]);
-  const [volatilityData, setVolatilityData] = useState([]);
+  const [macroData, setMacroData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -16,186 +28,90 @@ const PriceChart = ({ changePoint = null, highlightedDate = null, showVolatility
     const fetchData = async () => {
       try {
         setLoading(true);
-        
-        // Fetch price data
-        const response = await API.get("/prices");
-        setData(response.data.data || []);
-        
-        // Fetch volatility data if needed
-        if (showVolatility) {
-          try {
-            const volRes = await API.get("/prices/volatility?window=30");
-            setVolatilityData(volRes.data.data || []);
-          } catch (volErr) {
-            console.warn("Volatility data unavailable:", volErr);
-          }
-        }
-        
-        setError(null);
+        const [pricesRes, macroRes] = await Promise.all([
+          API.get("/prices"),
+          API.get("/prices/macro-overlay")
+        ]);
+        setData(pricesRes.data.data || []);
+        setMacroData(macroRes.data.data || []);
       } catch (err) {
-        console.error("Error fetching price data:", err);
-        setError("Failed to load price data");
+        setError("Failed to load chart data");
       } finally {
         setLoading(false);
       }
     };
-
     fetchData();
-  }, [showVolatility]);
+  }, []);
+
+  const chartData = useMemo(() => {
+    const macroMap = new Map(macroData.map((d) => [d.Date, d]));
+    return data.map((point) => ({
+      ...point,
+      ...(macroMap.get(point.Date) || {})
+    }));
+  }, [data, macroData]);
 
   if (loading) {
-    return (
-      <ResponsiveContainer width="100%" height={350}>
-        <div className="loading-card skeleton" style={{ height: 350 }}></div>
-      </ResponsiveContainer>
-    );
+    return <div className="skeleton" style={{ height: 350 }} />;
   }
-
   if (error) {
-    return (
-      <div className="error-state" style={{ height: 350 }}>
-        <div className="error-icon">⚠️</div>
-        <p>{error}</p>
-      </div>
-    );
+    return <div className="error-state">{error}</div>;
   }
 
   const formatDate = (dateStr) => {
-    if (!dateStr) return '';
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'short',
-      day: 'numeric'
+    if (!dateStr) return "";
+    return new Date(dateStr).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short"
     });
   };
 
-  // Merge volatility data with price data if showing volatility
-  const chartData = showVolatility && volatilityData.length > 0
-    ? data.map(item => {
-        const volItem = volatilityData.find(v => v.Date === item.Date);
-        return {
-          ...item,
-          Volatility: volItem?.Volatility || null
-        };
-      })
-    : data;
-
-  const CustomTooltip = ({ active, payload, label }) => {
-    if (active && payload && payload.length) {
-      const data = payload[0].payload;
-      return (
-        <div className="custom-tooltip">
-          <p style={{ fontWeight: 600, marginBottom: 4 }}>{formatDate(label)}</p>
-          <p style={{ color: '#1e3a5f' }}>
-            Price: <strong>${Number(data.Price).toFixed(2)}</strong>
-          </p>
-          {showVolatility && data.Volatility != null && (
-            <p style={{ color: '#6c757d', fontSize: '0.85rem' }}>
-              Volatility: <strong>{data.Volatility.toFixed(4)}</strong>
-            </p>
-          )}
-        </div>
-      );
-    }
-    return null;
-  };
-
-  // Create reference lines for change point and highlighted date
-  const referenceLines = [];
-  
-  if (changePoint) {
-    referenceLines.push(
-      <ReferenceLine
-        key="change-point"
-        x={changePoint}
-        stroke="#ef4444"
-        strokeDasharray="5 5"
-        label={{
-          value: 'Change Point',
-          position: 'top',
-          fill: '#ef4444',
-          fontSize: 11,
-          fontWeight: 500
-        }}
-      />
-    );
-  }
-  
-  if (highlightedDate && highlightedDate !== changePoint) {
-    referenceLines.push(
-      <ReferenceLine
-        key="highlighted"
-        x={highlightedDate}
-        stroke="#d4a373"
-        strokeDasharray="3 3"
-        label={{
-          value: 'Event',
-          position: 'top',
-          fill: '#d4a373',
-          fontSize: 11,
-          fontWeight: 500
-        }}
-      />
-    );
-  }
-
-  if (showVolatility) {
-    return (
-      <ResponsiveContainer width="100%" height={350}>
-        <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e9ecef" />
-          <XAxis 
-            dataKey="Date" 
-            tickFormatter={formatDate}
-            tick={{ fill: '#6c757d', fontSize: 11 }}
-            axisLine={{ stroke: '#e9ecef' }}
-          />
-          <YAxis 
-            yAxisId="volatility"
-            tick={{ fill: '#6c757d', fontSize: 11 }}
-            orientation="right"
-          />
-          <Tooltip content={<CustomTooltip />} />
-          <Area
-            yAxisId="volatility"
-            type="monotone"
-            dataKey="Volatility"
-            stroke="#10b981"
-            fill="rgba(16, 185, 129, 0.1)"
-            strokeWidth={2}
-          />
-          {referenceLines}
-        </AreaChart>
-      </ResponsiveContainer>
-    );
-  }
-
   return (
     <ResponsiveContainer width="100%" height={350}>
-      <LineChart data={data} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+      <LineChart
+        data={chartData}
+        onClick={(state) => {
+          if (onDateClick && state?.activeLabel) {
+            onDateClick(state.activeLabel);
+          }
+        }}
+      >
         <CartesianGrid strokeDasharray="3 3" stroke="#e9ecef" />
-        <XAxis 
-          dataKey="Date" 
-          tickFormatter={formatDate}
-          tick={{ fill: '#6c757d', fontSize: 11 }}
-          axisLine={{ stroke: '#e9ecef' }}
-        />
-        <YAxis 
-          tick={{ fill: '#6c757d', fontSize: 11 }}
-          axisLine={{ stroke: '#e9ecef' }}
-          tickFormatter={(value) => `$${value}`}
-        />
-        <Tooltip content={<CustomTooltip />} />
-        <Line
-          type="monotone"
-          dataKey="Price"
-          stroke="#1e3a5f"
-          strokeWidth={2}
-          dot={false}
-          activeDot={{ r: 6, fill: '#1e3a5f' }}
-        />
-        {referenceLines}
+        <XAxis dataKey="Date" tickFormatter={formatDate} />
+        <YAxis yAxisId="left" tickFormatter={(value) => `$${value}`} />
+        <YAxis yAxisId="right" orientation="right" />
+        <Tooltip />
+        <Line yAxisId="left" type="monotone" dataKey="Price" stroke="#1e3a5f" dot={false} strokeWidth={2} />
+
+        {showVolatility && (
+          <Line yAxisId="right" type="monotone" dataKey="Volatility" stroke="#10b981" dot={false} />
+        )}
+        {macroToggles.GDP && <Line yAxisId="right" dataKey="GDP" stroke="#2d6a4f" dot={false} />}
+        {macroToggles.Inflation && <Line yAxisId="right" dataKey="Inflation" stroke="#d4a373" dot={false} />}
+        {macroToggles.ExchangeRate && <Line yAxisId="right" dataKey="ExchangeRate" stroke="#8b5cf6" dot={false} />}
+
+        {changePoints.map((cp, idx) => (
+          <ReferenceLine
+            key={`${cp.tau_date}-${idx}`}
+            x={cp.tau_date}
+            yAxisId="left"
+            stroke="#ef4444"
+            strokeDasharray="4 4"
+            label={{ value: `CP${idx + 1}`, position: "top", fill: "#ef4444" }}
+          />
+        ))}
+        {highlightedDate && (
+          <ReferenceLine x={highlightedDate} yAxisId="left" stroke="#f59e0b" strokeDasharray="2 2" />
+        )}
+        {macroToggles.Causes && closestEventDate && (
+          <ReferenceLine
+            x={closestEventDate}
+            yAxisId="left"
+            stroke="#0ea5e9"
+            strokeDasharray="6 3"
+            label={{ value: "Closest Event", position: "top", fill: "#0ea5e9" }}
+          />
+        )}
       </LineChart>
     </ResponsiveContainer>
   );
