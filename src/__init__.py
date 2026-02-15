@@ -1,1 +1,1 @@
-"""src package init"""
+"""Top-level package for Brent oil analysis."""
