@@ -1,0 +1,15 @@
+{
+  "selected_lag": 1,
+  "aic": null,
+  "bic": null,
+  "hqic": null,
+  "params": {
+    "log_return": {
+      "log_return": -0.013834247738906959,
+      "GDP": 0.0017173022132845879,
+      "Inflation": -0.009790592559644089,
+      "ExchangeRate": -0.005433857769699711
+    }
+  },
+  "mode": "fallback-no-statsmodels"
+}

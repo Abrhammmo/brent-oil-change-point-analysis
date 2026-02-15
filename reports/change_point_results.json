@@ -1,7 +1,59 @@
 {
-  "change_point_date": "2012-06-04",
-  "mean_before": 0.000093,
-  "mean_after": 0.008218,
-  "absolute_change": 0.008125,
-  "percent_change": 8722.31
+  "n_change_points": 2,
+  "change_points": [
+    {
+      "name": "cp_1",
+      "tau_index": 2973,
+      "tau_date": "1999-02-03"
+    },
+    {
+      "name": "cp_2",
+      "tau_index": 5947,
+      "tau_date": "2010-10-13"
+    }
+  ],
+  "regimes": [
+    {
+      "name": "regime_1",
+      "start_date": "1987-05-20",
+      "end_date": "1999-02-03",
+      "duration": 2974,
+      "mu": -0.00018401635355958488,
+      "sigma": 0.02306321814437025
+    },
+    {
+      "name": "regime_2",
+      "start_date": "1999-02-03",
+      "end_date": "2010-10-13",
+      "duration": 2975,
+      "mu": 0.0007025519442909646,
+      "sigma": 0.024661571845548888
+    },
+    {
+      "name": "regime_3",
+      "start_date": "2010-10-13",
+      "end_date": "2022-11-14",
+      "duration": 3064,
+      "mu": 3.9230881709793856e-05,
+      "sigma": 0.028474770301799745
+    }
+  ],
+  "business_impact": [
+    {
+      "transition": "regime_1 -> regime_2",
+      "mean_shift": 0.0008865682978505495,
+      "mean_shift_percent": 481.7877763040646,
+      "volatility_shift": 0.0015983537011786397,
+      "duration_before": 2974,
+      "duration_after": 2975
+    },
+    {
+      "transition": "regime_2 -> regime_3",
+      "mean_shift": -0.0006633210625811707,
+      "mean_shift_percent": -94.41594574912368,
+      "volatility_shift": 0.003813198456250857,
+      "duration_before": 2975,
+      "duration_after": 3064
+    }
+  ]
 }
