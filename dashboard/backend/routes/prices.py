@@ -1,129 +1,99 @@
-from flask import Blueprint, jsonify, request
-import pandas as pd
-from pathlib import Path
+from __future__ import annotations
+
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, Optional
+
+import numpy as np
+import pandas as pd
+from flask import Blueprint, current_app, jsonify, request
+
+from src.constants import DEFAULT_VOLATILITY_WINDOW
+from src.data.macro_loader import load_macro_data
 
 prices_bp = Blueprint("prices", __name__)
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 DATA_PATH = BASE_DIR / "data" / "processed" / "brentoilprices_processed.csv"
 
-@prices_bp.route("/", methods=["GET"])
-def get_prices():
-    """
-    Get historical Brent oil prices with optional date range filtering.
-    
-    Query Parameters:
-        start_date (str): Filter from this date (YYYY-MM-DD)
-        end_date (str): Filter until this date (YYYY-MM-DD)
-    
-    Returns:
-        JSON: List of price records with Date and Price fields
-    """
-    try:
-        df = pd.read_csv(DATA_PATH)
-        
-        # Ensure Date column exists and is properly formatted
-        if "Date" not in df.columns:
-            return jsonify({"error": "Date column not found"}), 400
-        
-        df["Date"] = pd.to_datetime(df["Date"])
-        
-        # Apply date range filtering if provided
-        start_date = request.args.get("start_date")
-        end_date = request.args.get("end_date")
-        
-        if start_date:
-            start = datetime.strptime(start_date, "%Y-%m-%d")
-            df = df[df["Date"] >= start]
-        
-        if end_date:
-            end = datetime.strptime(end_date, "%Y-%m-%d")
-            df = df[df["Date"] <= end]
-        
-        # Sort by date
-        df = df.sort_values("Date")
-        
-        # Format dates for JSON serialization
-        df["Date"] = df["Date"].dt.strftime("%Y-%m-%d")
-        
-        # Ensure numeric columns are native Python types and drop rows with missing Price
-        if "Price" in df.columns:
-            df = df[df["Price"].notna()]
-            df["Price"] = df["Price"].astype(float)
 
-        # If log_return exists but not Price, keep both available
-        if "log_return" in df.columns:
-            df["log_return"] = pd.to_numeric(df["log_return"], errors="coerce")
+def _get_cache() -> Any:
+    return current_app.config.get("CACHE")
+
+
+def _load_prices() -> pd.DataFrame:
+    cache = _get_cache()
+    cache_key = "prices_df"
+    if cache is not None:
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached.copy()
+
+    df = pd.read_csv(DATA_PATH)
+    df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+    df["Price"] = pd.to_numeric(df["Price"], errors="coerce")
+    if "log_return" in df.columns:
+        df["log_return"] = pd.to_numeric(df["log_return"], errors="coerce")
+    if cache is not None:
+        cache.set(cache_key, df.copy())
+    return df
+
+
+def _parse_date(value: Optional[str]) -> Optional[datetime]:
+    if not value:
+        return None
+    return datetime.strptime(value, "%Y-%m-%d")
+
+
+@prices_bp.route("/", methods=["GET"])
+def get_prices() -> Any:
+    try:
+        df = _load_prices()
+        start_date = _parse_date(request.args.get("start_date"))
+        end_date = _parse_date(request.args.get("end_date"))
+
+        if start_date is not None:
+            df = df[df["Date"] >= start_date]
+        if end_date is not None:
+            df = df[df["Date"] <= end_date]
+
+        df = df.sort_values("Date")
+        df["Date"] = df["Date"].dt.strftime("%Y-%m-%d")
 
         records = df.to_dict(orient="records")
-        # Convert numpy types to native Python floats/ints where needed
-        def normalize_value(v):
-            try:
-                if pd.isna(v):
-                    return None
-            except Exception:
-                pass
-            if isinstance(v, (int, float)):
-                return float(v)
-            return v
+        normalized: list[Dict[str, Any]] = []
+        for record in records:
+            item: Dict[str, Any] = {}
+            for key, value in record.items():
+                if pd.isna(value):
+                    item[key] = None
+                elif isinstance(value, (np.integer, np.floating)):
+                    item[key] = float(value)
+                else:
+                    item[key] = value
+            normalized.append(item)
 
-        records = [{k: normalize_value(v) for k, v in r.items()} for r in records]
-        
-        return jsonify({
-            "data": records,
-            "count": len(records),
-            "filters": {
-                "start_date": start_date,
-                "end_date": end_date
+        return jsonify(
+            {
+                "data": normalized,
+                "count": len(normalized),
+                "filters": {
+                    "start_date": request.args.get("start_date"),
+                    "end_date": request.args.get("end_date"),
+                },
             }
-        })
-
+        )
     except FileNotFoundError:
-        # Return sample dataset for local development
-        sample = [
-            {"Date": "2008-01-01", "Price": 100.0},
-            {"Date": "2008-06-01", "Price": 120.5},
-            {"Date": "2008-09-15", "Price": 75.3},
-            {"Date": "2009-01-01", "Price": 50.1},
-            {"Date": "2014-06-01", "Price": 115.0},
-            {"Date": "2016-01-01", "Price": 35.0},
-            {"Date": "2020-04-01", "Price": 25.0},
-            {"Date": "2022-03-01", "Price": 120.0}
-        ]
-        return jsonify({"data": sample, "count": len(sample)})
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Data file not found"}), 404
+    except Exception as exc:  # pragma: no cover
+        return jsonify({"error": str(exc)}), 500
 
 
 @prices_bp.route("/statistics", methods=["GET"])
-def get_statistics():
-    """
-    Get price statistics for the dataset.
-    
-    Returns:
-        JSON: Statistics including min, max, mean, std, etc.
-    """
+def get_statistics() -> Any:
     try:
-        df = pd.read_csv(DATA_PATH)
-        
-        if "Price" not in df.columns and "log_price" not in df.columns:
-            return jsonify({"error": "Price or log_price column not found"}), 400
-        
-        # Calculate statistics
-        # If Price missing but log_price present, compute Price
-        if "Price" not in df.columns and "log_price" in df.columns:
-            df["Price"] = pd.to_numeric(df["log_price"], errors="coerce").apply(lambda x: float(pd.np.exp(x)) if not pd.isna(x) else None)
-
-        # Ensure Date formatting
-        if "Date" in df.columns:
-            try:
-                df["Date"] = pd.to_datetime(df["Date"]).dt.strftime("%Y-%m-%d")
-            except Exception:
-                pass
-
-        stats = {
+        df = _load_prices()
+        stats: Dict[str, Any] = {
             "min_price": float(df["Price"].min()),
             "max_price": float(df["Price"].max()),
             "mean_price": float(df["Price"].mean()),
@@ -131,65 +101,57 @@ def get_statistics():
             "median_price": float(df["Price"].median()),
             "count": int(df["Price"].count()),
             "date_range": {
-                "start": str(df["Date"].min()) if "Date" in df.columns else None,
-                "end": str(df["Date"].max()) if "Date" in df.columns else None
-            }
+                "start": df["Date"].min().strftime("%Y-%m-%d"),
+                "end": df["Date"].max().strftime("%Y-%m-%d"),
+            },
         }
-        
         return jsonify(stats)
-
     except FileNotFoundError:
         return jsonify({"error": "Data file not found"}), 404
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception as exc:  # pragma: no cover
+        return jsonify({"error": str(exc)}), 500
 
 
 @prices_bp.route("/volatility", methods=["GET"])
-def get_volatility():
-    """
-    Calculate rolling volatility of oil prices.
-    
-    Query Parameters:
-        window (int): Rolling window size (default: 30 days)
-    
-    Returns:
-        JSON: Volatility metrics
-    """
+def get_volatility() -> Any:
     try:
-        window = int(request.args.get("window", 30))
-        df = pd.read_csv(DATA_PATH)
-        
-        if "Date" not in df.columns:
-            return jsonify({"error": "Date column not found"}), 400
+        window = int(request.args.get("window", DEFAULT_VOLATILITY_WINDOW))
+        df = _load_prices().sort_values("Date")
+        if "log_return" not in df.columns:
+            df["log_return"] = np.log(df["Price"]).diff()
+        df["Volatility"] = df["log_return"].rolling(window=window).std()
+        df["Date"] = df["Date"].dt.strftime("%Y-%m-%d")
 
-        df = df.sort_values("Date")
-
-        # prefer log_return column if present, otherwise compute simple returns
-        if "log_return" in df.columns:
-            df["LogReturn"] = pd.to_numeric(df["log_return"], errors="coerce")
-        else:
-            # compute log returns from Price if possible
-            df["Price"] = pd.to_numeric(df["Price"], errors="coerce")
-            df["LogReturn"] = (df["Price"].astype(float).pct_change()).replace([pd.np.inf, -pd.np.inf], pd.NA)
-
-        # Calculate rolling volatility (standard deviation of returns)
-        df["Volatility"] = df["LogReturn"].rolling(window=window).std()
-
-        # Format Date
-        try:
-            df["Date"] = pd.to_datetime(df["Date"]).dt.strftime("%Y-%m-%d")
-        except Exception:
-            pass
-
-        records = df[["Date", "Price", "Volatility"]].dropna(subset=["Volatility"]).to_dict(orient="records")
-        
-        return jsonify({
-            "data": records,
-            "window": window,
-            "avg_volatility": float(df["Volatility"].mean()) if not df["Volatility"].empty else 0
-        })
-
+        records = (
+            df[["Date", "Price", "Volatility"]]
+            .dropna(subset=["Volatility"])
+            .to_dict(orient="records")
+        )
+        return jsonify(
+            {
+                "data": records,
+                "window": window,
+                "avg_volatility": float(pd.DataFrame(records)["Volatility"].mean())
+                if records
+                else 0.0,
+            }
+        )
     except FileNotFoundError:
         return jsonify({"error": "Data file not found"}), 404
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception as exc:  # pragma: no cover
+        return jsonify({"error": str(exc)}), 500
+
+
+@prices_bp.route("/macro-overlay", methods=["GET"])
+def get_macro_overlay() -> Any:
+    """Return oil prices merged with GDP, inflation, and FX series."""
+    try:
+        df = _load_prices()
+        merged = load_macro_data(df)
+        merged["Date"] = merged["Date"].dt.strftime("%Y-%m-%d")
+        out_cols = ["Date", "Price", "GDP", "Inflation", "ExchangeRate"]
+        return jsonify({"data": merged[out_cols].to_dict(orient="records"), "count": len(merged)})
+    except FileNotFoundError:
+        return jsonify({"error": "Data file not found"}), 404
+    except Exception as exc:  # pragma: no cover
+        return jsonify({"error": str(exc)}), 500

@@ -1,152 +1,133 @@
-from flask import Blueprint, jsonify
+from __future__ import annotations
+
+import base64
 import json
 from pathlib import Path
+from typing import Any, Dict, List
+
+import numpy as np
 import pandas as pd
+from flask import Blueprint, jsonify, request
+
+from src.constants import CHANGE_POINT_RESULTS_PATH, SHAP_GLOBAL_PNG, SHAP_LOCAL_PNG
+from src.data.macro_loader import load_macro_data
+from src.models.explainability import run_shap_analysis
 
 change_points_bp = Blueprint("change_points", __name__)
 
 BASE_DIR = Path(__file__).resolve().parents[3]
-RESULTS_PATH = BASE_DIR / ".." / "reports" / "change_point_results.json"
-PRICES_PATH = BASE_DIR /".." / "data" / "processed" / "brentoilprices_processed.csv"
+RESULTS_PATH = BASE_DIR / CHANGE_POINT_RESULTS_PATH
+PRICES_PATH = BASE_DIR / "data" / "processed" / "brentoilprices_processed.csv"
+SHAP_GLOBAL_PATH = BASE_DIR / SHAP_GLOBAL_PNG
+SHAP_LOCAL_PATH = BASE_DIR / SHAP_LOCAL_PNG
+
+
+def _load_change_point_results() -> Dict[str, Any]:
+    if RESULTS_PATH.exists():
+        with RESULTS_PATH.open("r", encoding="utf-8") as handle:
+            return json.load(handle)
+    return {
+        "n_change_points": 1,
+        "change_points": [{"name": "cp_1", "tau_date": "2012-06-04", "tau_index": 1500}],
+        "regimes": [],
+        "business_impact": [],
+    }
+
 
 @change_points_bp.route("/", methods=["GET"])
-def get_change_points():
-    """
-    Get Bayesian change point detection results.
-    
-    Returns:
-        JSON: Change point parameters and posterior statistics
-    """
-    try:
-        with open(RESULTS_PATH, "r") as f:
-            results = json.load(f)
-        
-        return jsonify(results)
-
-    except FileNotFoundError:
-        # Return sample change point for local development
-        sample = {
-            "tau_date": "2008-09-15",
-            "tau_index": 2,
-            "tau_posterior_mean": 2,
-            "mu_before": 100.5,
-            "mu_after": 65.2,
-            "sigma_before": 12.3,
-            "sigma_after": 18.7,
-            "interpretation": "Major price regime change detected during 2008 financial crisis"
-        }
-        return jsonify(sample)
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+def get_change_points() -> Any:
+    return jsonify(_load_change_point_results())
 
 
 @change_points_bp.route("/details", methods=["GET"])
-def get_change_point_details():
-    """
-    Get detailed change point analysis with regime statistics.
-    
-    Returns:
-        JSON: Detailed statistics for before and after regimes
-    """
+def get_change_point_details() -> Any:
     try:
-        # Load change point results
-        with open(RESULTS_PATH, "r") as f:
-            results = json.load(f)
-        
-        # Load prices for regime analysis
-        prices_df = pd.read_csv(PRICES_PATH)
-        prices_df["Date"] = pd.to_datetime(prices_df["Date"])
-        
-        tau_date = results.get("tau_date")
-        if tau_date:
-            tau_dt = pd.to_datetime(tau_date)
-            
-            # Split data into before and after regimes
-            before = prices_df[prices_df["Date"] < tau_dt]
-            after = prices_df[prices_df["Date"] >= tau_dt]
-            
-            details = {
-                "change_point": {
-                    "date": tau_date,
-                    "index": results.get("tau_index")
-                },
-                "before_regime": {
-                    "start_date": before["Date"].min().strftime("%Y-%m-%d") if not before.empty else None,
-                    "end_date": before["Date"].max().strftime("%Y-%m-%d") if not before.empty else None,
-                    "count": int(before.shape[0]) if not before.empty else 0,
-                    "mean_price": round(float(before["Price"].mean()), 2) if not before.empty else None,
-                    "std_price": round(float(before["Price"].std()), 2) if not before.empty else None,
-                    "min_price": round(float(before["Price"].min()), 2) if not before.empty else None,
-                    "max_price": round(float(before["Price"].max()), 2) if not before.empty else None
-                },
-                "after_regime": {
-                    "start_date": after["Date"].min().strftime("%Y-%m-%d") if not after.empty else None,
-                    "end_date": after["Date"].max().strftime("%Y-%m-%d") if not after.empty else None,
-                    "count": int(after.shape[0]) if not after.empty else 0,
-                    "mean_price": round(float(after["Price"].mean()), 2) if not after.empty else None,
-                    "std_price": round(float(after["Price"].std()), 2) if not after.empty else None,
-                    "min_price": round(float(after["Price"].min()), 2) if not after.empty else None,
-                    "max_price": round(float(after["Price"].max()), 2) if not after.empty else None
-                },
-                "regime_comparison": {
-                    "mean_change": round(float(after["Price"].mean() - before["Price"].mean()), 2) if not before.empty and not after.empty else None,
-                    "mean_change_percent": round(float((after["Price"].mean() - before["Price"].mean()) / before["Price"].mean() * 100), 2) if not before.empty and not after.empty else None,
-                    "volatility_change": round(float(after["Price"].std() - before["Price"].std()), 2) if not before.empty and not after.empty else None
-                }
-            }
-            
-            return jsonify(details)
-        
-        return jsonify(results)
+        results = _load_change_point_results()
+        prices = pd.read_csv(PRICES_PATH)
+        prices["Date"] = pd.to_datetime(prices["Date"], errors="coerce")
 
+        regimes: List[Dict[str, Any]] = []
+        for cp in results.get("change_points", []):
+            tau_date = pd.to_datetime(cp["tau_date"])
+            before = prices[prices["Date"] < tau_date]
+            after = prices[prices["Date"] >= tau_date]
+            if before.empty or after.empty:
+                continue
+            regimes.append(
+                {
+                    "change_point": cp,
+                    "before_mean": float(before["Price"].mean()),
+                    "after_mean": float(after["Price"].mean()),
+                    "before_volatility": float(before["Price"].std()),
+                    "after_volatility": float(after["Price"].std()),
+                    "mean_shift_percent": float(
+                        ((after["Price"].mean() - before["Price"].mean()) / before["Price"].mean())
+                        * 100.0
+                    ),
+                    "duration_before": int(len(before)),
+                    "duration_after": int(len(after)),
+                }
+            )
+        return jsonify({"regime_analysis": regimes, "business_impact": results.get("business_impact", [])})
     except FileNotFoundError:
-        return jsonify({"error": "Results file not found"}), 404
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Required files not found"}), 404
+    except Exception as exc:  # pragma: no cover
+        return jsonify({"error": str(exc)}), 500
 
 
 @change_points_bp.route("/posterior", methods=["GET"])
-def get_posterior_samples():
-    """
-    Get posterior distribution samples for visualization.
-    
-    Returns:
-        JSON: Posterior samples for tau, mu, and sigma parameters
-    """
-    try:
-        with open(RESULTS_PATH, "r") as f:
-            results = json.load(f)
-        
-        # Generate simulated posterior samples for visualization
-        # In a real implementation, these would come from PyMC trace
-        import numpy as np
-        
-        tau_mean = results.get("tau_index", 2)
-        posterior_samples = {
-            "tau": {
-                "samples": [tau_mean + np.random.normal(0, 0.5) for _ in range(100)],
-                "hdi_lower": max(0, tau_mean - 2),
-                "hdi_upper": tau_mean + 2,
-                "posterior_mean": tau_mean
-            },
-            "mu_before": {
-                "samples": [results.get("mu_before", 100) + np.random.normal(0, 2) for _ in range(100)],
-                "hdi_lower": results.get("mu_before", 100) - 5,
-                "hdi_upper": results.get("mu_before", 100) + 5,
-                "posterior_mean": results.get("mu_before", 100)
-            },
-            "mu_after": {
-                "samples": [results.get("mu_after", 65) + np.random.normal(0, 2) for _ in range(100)],
-                "hdi_lower": results.get("mu_after", 65) - 5,
-                "hdi_upper": results.get("mu_after", 65) + 5,
-                "posterior_mean": results.get("mu_after", 65)
-            }
+def get_posterior_samples() -> Any:
+    """Provide synthetic posterior samples shaped for dashboard rendering."""
+    results = _load_change_point_results()
+    cps = results.get("change_points", [])
+    posterior: Dict[str, Dict[str, Any]] = {}
+    for idx, cp in enumerate(cps, start=1):
+        center = cp.get("tau_index", 1)
+        samples = np.random.normal(center, 5.0, 300).clip(min=0).tolist()
+        posterior[f"tau_{idx}"] = {
+            "samples": samples,
+            "posterior_mean": float(np.mean(samples)),
+            "hdi_lower": float(np.percentile(samples, 3)),
+            "hdi_upper": float(np.percentile(samples, 97)),
+            "tau_date": cp.get("tau_date"),
         }
-        
-        return jsonify(posterior_samples)
+    return jsonify(posterior)
 
-    except FileNotFoundError:
-        return jsonify({"error": "Results file not found"}), 404
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+
+@change_points_bp.route("/business-impact", methods=["GET"])
+def get_business_impact() -> Any:
+    results = _load_change_point_results()
+    return jsonify({"business_impact": results.get("business_impact", [])})
+
+
+def _png_to_base64(path: Path) -> str | None:
+    if not path.exists():
+        return None
+    return base64.b64encode(path.read_bytes()).decode("utf-8")
+
+
+@change_points_bp.route("/shap", methods=["GET"])
+def get_shap_assets() -> Any:
+    selected_date = request.args.get("selected_date")
+    try:
+        prices = pd.read_csv(PRICES_PATH)
+        prices["Date"] = pd.to_datetime(prices["Date"], errors="coerce")
+        merged = load_macro_data(prices)
+        run_shap_analysis(
+            merged,
+            global_path=str(SHAP_GLOBAL_PATH),
+            local_path=str(SHAP_LOCAL_PATH),
+            selected_date=selected_date,
+        )
+    except Exception:
+        # Keep serving existing artifacts if dynamic generation fails.
+        pass
+
+    return jsonify(
+        {
+            "global_plot_b64": _png_to_base64(SHAP_GLOBAL_PATH),
+            "local_plot_b64": _png_to_base64(SHAP_LOCAL_PATH),
+            "global_plot_path": str(SHAP_GLOBAL_PATH),
+            "local_plot_path": str(SHAP_LOCAL_PATH),
+        }
+    )
