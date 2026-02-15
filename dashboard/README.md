@@ -2,6 +2,19 @@
 
 This folder contains a lightweight dashboard prototype for exploring the Brent oil change-point analysis. It includes a Flask backend that serves data endpoints and a small React frontend that consumes those endpoints to render charts and an event timeline.
 
+## Enhanced Dashboard Features
+
+- Regime visualization for multiple Bayesian change points
+- Macro overlay toggles (`GDP`, `Inflation`, `ExchangeRate`) on price chart
+- Posterior distribution panel for change-point uncertainty
+- Business impact panel:
+  - mean % change before/after regime
+  - volatility shift
+  - regime durations
+- SHAP tab:
+  - global feature-importance summary
+  - local "Why this prediction?" explanation
+
 **Contents**
 
 - `backend/` — Flask app, API routes and small developer scripts
@@ -42,6 +55,11 @@ The React dev server will open a browser at `http://localhost:3000` (or an avail
 - `GET /api/prices` — returns price time series JSON from `data/processed/brentoilprices_processed.csv` (fields: `Date`, `Price`, `log_price`, `log_return` when available).
 - `GET /api/events` — returns a list of events (sourced from `data/processed/events.csv`) as `{date, title, description}` objects.
 - `GET /api/change-points` — returns detected change-point summary (or a small canned example when model output is not present).
+- `GET /api/change-points/details` — per-regime metrics and comparisons.
+- `GET /api/change-points/posterior` — posterior sample summary for rendering.
+- `GET /api/change-points/business-impact` — compact transition impact metrics.
+- `GET /api/change-points/shap` — SHAP global/local images (base64 + path).
+- `GET /api/prices/macro-overlay` — merged price + macro series.
 
 **Developer notes**
 
