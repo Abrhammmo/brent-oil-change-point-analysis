@@ -1,0 +1,1 @@
+placeholder posterior artifact: install arviz+pymc to generate full netcdf
