@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import API from "../services/api";
 import PriceChart from "./PriceChart";
 
-const ChangePointChart = ({ macroToggles, events = [] }) => {
+const ChangePointChart = ({ macroToggles, events = [], theme = "light" }) => {
   const [results, setResults] = useState(null);
   const [posterior, setPosterior] = useState({});
   const [impact, setImpact] = useState([]);
@@ -49,7 +49,7 @@ const ChangePointChart = ({ macroToggles, events = [] }) => {
 
   return (
     <div>
-      <PriceChart changePoints={changePoints} macroToggles={macroToggles} />
+      <PriceChart changePoints={changePoints} macroToggles={macroToggles} theme={theme} />
       <div className="events-grid" style={{ marginTop: 16 }}>
         <div className="stat-card">
           <div className="label">Detected Regimes</div>

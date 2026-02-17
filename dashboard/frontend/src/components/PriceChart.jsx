@@ -17,7 +17,8 @@ const PriceChart = ({
   showVolatility = false,
   macroToggles = { GDP: false, Inflation: false, ExchangeRate: false, Causes: false },
   closestEventDate = null,
-  onDateClick = null
+  onDateClick = null,
+  theme = "light"
 }) => {
   const [data, setData] = useState([]);
   const [macroData, setMacroData] = useState([]);
@@ -66,6 +67,14 @@ const PriceChart = ({
     });
   };
 
+  const chartGrid = theme === "dark" ? "#3a3a3a" : "#e9ecef";
+  const axisColor = theme === "dark" ? "#d1d5db" : "#6c757d";
+  const tooltipStyle = {
+    backgroundColor: theme === "dark" ? "#1f2937" : "#ffffff",
+    border: `1px solid ${theme === "dark" ? "#374151" : "#e9ecef"}`,
+    color: theme === "dark" ? "#e5e7eb" : "#111827",
+  };
+
   return (
     <ResponsiveContainer width="100%" height={350}>
       <LineChart
@@ -76,11 +85,11 @@ const PriceChart = ({
           }
         }}
       >
-        <CartesianGrid strokeDasharray="3 3" stroke="#e9ecef" />
-        <XAxis dataKey="Date" tickFormatter={formatDate} />
-        <YAxis yAxisId="left" tickFormatter={(value) => `$${value}`} />
-        <YAxis yAxisId="right" orientation="right" />
-        <Tooltip />
+        <CartesianGrid strokeDasharray="3 3" stroke={chartGrid} />
+        <XAxis dataKey="Date" tickFormatter={formatDate} tick={{ fill: axisColor }} />
+        <YAxis yAxisId="left" tickFormatter={(value) => `$${value}`} tick={{ fill: axisColor }} />
+        <YAxis yAxisId="right" orientation="right" tick={{ fill: axisColor }} />
+        <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: axisColor }} />
         <Line yAxisId="left" type="monotone" dataKey="Price" stroke="#1e3a5f" dot={false} strokeWidth={2} />
 
         {showVolatility && (

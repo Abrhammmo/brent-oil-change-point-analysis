@@ -5,7 +5,7 @@ import Filters from "../components/Filters";
 import PriceChart from "../components/PriceChart";
 import API from "../services/api";
 
-const Dashboard = () => {
+const Dashboard = ({ theme = "light" }) => {
   const [stats, setStats] = useState({
     totalDataPoints: 0,
     dateRange: "",
@@ -185,6 +185,7 @@ const Dashboard = () => {
               macroToggles={macroToggles}
               closestEventDate={closestClickedEvent?.date}
               onDateClick={setClickedDate}
+              theme={theme}
             />
           </div>
         </div>
@@ -193,7 +194,7 @@ const Dashboard = () => {
       {activeTab === "regimes" && (
         <div className="card">
           <div className="card-header"><h3>Regime Visualization</h3></div>
-          <div className="card-body"><ChangePointChart macroToggles={macroToggles} events={events} /></div>
+          <div className="card-body"><ChangePointChart macroToggles={macroToggles} events={events} theme={theme} /></div>
         </div>
       )}
 
