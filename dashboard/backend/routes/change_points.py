@@ -11,7 +11,7 @@ from flask import Blueprint, jsonify, request
 
 from src.constants import CHANGE_POINT_RESULTS_PATH, SHAP_GLOBAL_PNG, SHAP_LOCAL_PNG
 from src.data.macro_loader import load_macro_data
-from src.models.explainability import run_shap_analysis
+from src.models.explainability import run_shap_analysis, shap_runtime_status
 
 change_points_bp = Blueprint("change_points", __name__)
 
@@ -131,3 +131,8 @@ def get_shap_assets() -> Any:
             "local_plot_path": str(SHAP_LOCAL_PATH),
         }
     )
+
+
+@change_points_bp.route("/shap/status", methods=["GET"])
+def get_shap_status() -> Any:
+    return jsonify(shap_runtime_status())
