@@ -23,3 +23,5 @@ def test_var_pipeline_returns_summary(tmp_path) -> None:
     assert output.exists()
     assert summary["selected_lag"] >= 1
     assert "aic" in summary
+    assert summary["mode"] == "full-statsmodels"
+    assert "lag_order" in summary

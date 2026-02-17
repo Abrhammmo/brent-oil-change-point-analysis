@@ -33,3 +33,13 @@ def test_change_points_endpoint() -> None:
     assert resp.status_code == 200
     payload = resp.get_json()
     assert "change_points" in payload or "tau_date" in payload
+
+
+def test_shap_status_endpoint() -> None:
+    app = create_app()
+    client = app.test_client()
+    resp = client.get("/api/change-points/shap/status")
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    assert "shap_available" in payload
+    assert payload["mode"] in {"full", "fallback"}
