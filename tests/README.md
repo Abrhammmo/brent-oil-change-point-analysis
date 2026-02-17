@@ -1,20 +1,61 @@
+
 # tests
 
-This folder holds unit tests for the project.
+This folder contains unit tests for the project. Tests are runnable from the repository root and designed to be executed with `pytest`.
 
 Contents
 
-- `test_load_data.py`: tests for the data loading utilities in `src/data/load_data.py`.
+- `test_load_data.py` — tests for data loading utilities in `src/data/load_data.py`.
+- Other test modules exercise preprocessing, modeling, and utility functions.
 
-How to run
+Setup
 
-1. Ensure the project virtual environment is active and dependencies are installed (see top-level `requirements.txt`).
-2. From the project root run:
+1. Create and activate a virtual environment from the project root:
 
+```powershell
+python -m venv .venv
+.venv\Scripts\activate
 ```
+
+2. Install project dependencies:
+
+```powershell
+pip install -r requirements.txt
+```
+
+Running tests
+
+- Run the entire test suite from the project root:
+
+```powershell
+pytest
+```
+
+- Run tests in the `tests/` folder only:
+
+```powershell
 pytest tests
 ```
 
-Notes
+- Run a single test file:
 
-- Add further tests under this folder; keep tests importable from the project root.
+```powershell
+pytest tests/test_load_data.py
+```
+
+Tips
+
+- Use `-q` for quieter output or `-k <expr>` to filter tests by keyword.
+- If tests depend on sample data in `data/raw/` or `data/processed/`, ensure those files exist or mock filesystem access in tests.
+- To run tests with coverage (if `coverage` is installed):
+
+```powershell
+coverage run -m pytest && coverage report -m
+```
+
+Contributing
+
+- Add new tests under `tests/` and keep them importable from the project root (avoid relative imports inside tests).
+- When adding dependencies needed only for testing (e.g., `pytest-mock`, `coverage`), consider placing them in a separate `requirements-dev.txt`.
+
+If you want, I can split runtime vs dev dependencies and add a `requirements-dev.txt` including test tooling.

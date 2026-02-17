@@ -2,7 +2,7 @@
 
 Short description: This project detects structural breaks in Brent crude oil prices using Bayesian change-point modeling, enriches analysis with macroeconomic context (GDP, inflation, FX), and delivers insights through a Flask API + React dashboard with explainability views.
 
-[![CI](https://github.com/Abrhammmo/workflows/actions/workflows/ci.yml/badge.svg)](https://github.com/Abrhammmo/workflows/actions/workflows/ci.yml)
+[![ci2](https://github.com/Abrhammmo/brent-oil-change-point-analysis/actions/workflows/ci2.yml/badge.svg)](https://github.com/Abrhammmo/brent-oil-change-point-analysis/actions/workflows/ci2.yml)
 
 ## Business Problem
 Energy markets are highly sensitive to geopolitical shocks, monetary policy, and macroeconomic cycles.  
@@ -102,6 +102,8 @@ brent-oil-change-point-analysis/
 - Model: PyMC multi-change-point model with configurable `n_change_points`, `draws`, `tune`, `chains`, `target_accept` from `models/brent_cp_model_v1/model_config.json`.
 - Evaluation:
   - Structured regime output in `reports/change_point_results.json`
+  - VAR runtime mode is explicit in `reports/var_results.json` as `full-statsmodels` or `fallback-no-statsmodels`
+  - SHAP runtime status endpoint: `GET /api/change-points/shap/status`
   - Business-impact deltas (mean shift, volatility shift, regime duration)
   - Automated validation via pytest and CI pipeline
 
