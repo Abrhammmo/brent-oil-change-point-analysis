@@ -1,4 +1,3 @@
-
 # tests
 
 This folder contains unit tests for the project. Tests are runnable from the repository root and designed to be executed with `pytest`.
