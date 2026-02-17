@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Dict, Optional
+import warnings
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -78,6 +79,10 @@ def run_shap_analysis(
         plt.savefig(local_out, dpi=140)
         plt.close()
     else:
+        warnings.warn(
+            "Full SHAP unavailable. Using fallback explainability mode.",
+            RuntimeWarning,
+        )
         # Degraded mode: still provide explainability artifacts for dashboard/CI.
         if model is not None and hasattr(model, "feature_importances_"):
             importances = model.feature_importances_
@@ -104,3 +109,12 @@ def run_shap_analysis(
         plt.close()
 
     return {"global_plot": str(global_out), "local_plot": str(local_out)}
+
+
+def shap_runtime_status() -> Dict[str, object]:
+    """Return SHAP runtime availability and active mode."""
+    shap_available = shap is not None and RandomForestRegressor is not None
+    return {
+        "shap_available": bool(shap_available),
+        "mode": "full" if shap_available else "fallback",
+    }

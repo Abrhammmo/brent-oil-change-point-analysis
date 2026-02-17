@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any, Dict
 
 import numpy as np
 import pandas as pd
+import warnings
 
 try:
     from statsmodels.tsa.api import VAR
@@ -14,6 +16,8 @@ except ImportError:  # pragma: no cover
 
 from src.constants import VAR_RESULTS_PATH
 
+LOGGER = logging.getLogger(__name__)
+
 
 def fit_var_model(df: pd.DataFrame, maxlags: int = 3) -> Any:
     """Fit a VAR model over oil and macroeconomic variables."""
@@ -21,6 +25,11 @@ def fit_var_model(df: pd.DataFrame, maxlags: int = 3) -> Any:
     if data.empty:
         raise ValueError("No data available for VAR fit.")
     if VAR is None:
+        warnings.warn(
+            "statsmodels not available; VAR running in fallback-no-statsmodels mode.",
+            RuntimeWarning,
+        )
+        LOGGER.warning("VAR execution mode: fallback-no-statsmodels")
         # Fallback: pseudo-VAR summary based on lag-1 correlations.
         lagged = data.shift(1).dropna()
         aligned = data.iloc[1:]
@@ -41,6 +50,7 @@ def summarize_var_results(result: Any) -> Dict[str, Any]:
     """Build serializable summary from VAR results."""
     if isinstance(result, dict) and result.get("fallback"):
         return {
+            "lag_order": int(result["k_ar"]),
             "selected_lag": int(result["k_ar"]),
             "aic": None,
             "bic": None,
@@ -52,7 +62,10 @@ def summarize_var_results(result: Any) -> Dict[str, Any]:
             },
             "mode": "fallback-no-statsmodels",
         }
+    LOGGER.info("VAR execution mode: full-statsmodels")
     return {
+        "mode": "full-statsmodels",
+        "lag_order": int(result.k_ar),
         "selected_lag": int(result.k_ar),
         "aic": float(result.aic),
         "bic": float(result.bic),
