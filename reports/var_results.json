@@ -1,4 +1,5 @@
 {
+  "lag_order": 1,
   "selected_lag": 1,
   "aic": null,
   "bic": null,
