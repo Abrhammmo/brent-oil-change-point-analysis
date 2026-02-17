@@ -1,0 +1,15 @@
+name: ci2
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  pass:
+    runs-on: ubuntu-latest
+    steps:
+      - name: ci2
+        run: echo "This workflow is ci2"
